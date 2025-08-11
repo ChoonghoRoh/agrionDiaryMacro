@@ -2048,7 +2048,14 @@ class AgrionMacro:
                 if next_start_date:
                     # settings.py 파일 업데이트
                     self.update_settings_file(next_start_date)
-                    print(f"✅ 시작일이 {next_start_date}로 자동 업데이트되었습니다.")
+                    
+                    # .env 파일도 업데이트
+                    env_updated = self.update_env_file(next_start_date)
+                    if env_updated:
+                        print(f"✅ 시작일이 {next_start_date}로 자동 업데이트되었습니다. (settings.py + .env)")
+                    else:
+                        print(f"✅ 시작일이 {next_start_date}로 자동 업데이트되었습니다. (settings.py만)")
+                    
                     return next_start_date
                 else:
                     print("⚠️ 다음 시작일 계산 실패")
@@ -2093,6 +2100,46 @@ class AgrionMacro:
         except Exception as e:
             print(f"❌ settings.py 파일 업데이트 실패: {e}")
             raise
+    
+    def update_env_file(self, new_start_date):
+        """환경 변수 파일(.env)의 START_DATE를 업데이트합니다."""
+        try:
+            env_file = '.env'
+            
+            # .env 파일이 없으면 생성
+            if not os.path.exists(env_file):
+                print("⚠️ .env 파일이 없습니다. .env.example을 복사하여 생성합니다.")
+                if os.path.exists('.env.example'):
+                    import shutil
+                    shutil.copy('.env.example', env_file)
+                else:
+                    print("❌ .env.example 파일도 없습니다.")
+                    return False
+            
+            # 파일 읽기
+            with open(env_file, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            # START_DATE 라인 찾기 및 교체
+            if 'START_DATE=' in content:
+                # 기존 START_DATE 라인 교체
+                pattern = r'START_DATE=([^\n]*)'
+                replacement = f'START_DATE={new_start_date}'
+                updated_content = re.sub(pattern, replacement, content)
+            else:
+                # START_DATE 라인이 없으면 추가
+                updated_content = content + f'\nSTART_DATE={new_start_date}'
+            
+            # 파일 쓰기
+            with open(env_file, 'w', encoding='utf-8') as f:
+                f.write(updated_content)
+                
+            print(f"✅ .env 파일이 업데이트되었습니다: {new_start_date}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ .env 파일 업데이트 실패: {e}")
+            return False
     
 if __name__ == "__main__":
     macro = AgrionMacro()

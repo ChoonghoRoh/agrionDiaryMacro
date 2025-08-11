@@ -10,10 +10,11 @@ class Config:
     USERNAME = os.getenv('AGRION_USERNAME', '')
     PASSWORD = os.getenv('AGRION_PASSWORD', '')
     
-    # 날짜 설정 (2021년부터 2023년까지 벼 재배 전체 기간)
-    START_DATE = '2021-02-01'  # 2021년 2월 1일부터 시작
-    END_DATE = '2023-12-31'    # 2023년 12월 31일까지
+    # 날짜 설정 (.env 파일에서 읽기, 기본값 설정)
+    START_DATE = os.getenv('START_DATE', '2021-06-27')  # 시작일 지정
+    END_DATE = os.getenv('END_DATE', '2023-12-31')      # 종료일 지정
     
+
     # 영농일지 등록 간격 설정
     DIARY_INTERVAL_DAYS = 7    # 영농일지 등록 간격 (일) - 7일 = 1주일 간격
     
