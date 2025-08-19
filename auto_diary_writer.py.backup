@@ -11,9 +11,12 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
-from selenium.webdriver.firefox.service import Service
-from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.chrome.options import Options as ChromeOptions
 from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.chrome import ChromeDriverManager
 from settings import Config
 from ai_GPT_diary_content_generator import ContentGenerator
 
@@ -25,6 +28,7 @@ class AgrionMacro:
         self.schedule_data = None
         self.log_file = None
         self.log_filename = None
+        self.is_cleanup_done = False  # cleanup 중복 방지
         self.setup_driver()
         self.load_schedule_data()
         self.setup_signal_handlers()
@@ -34,30 +38,64 @@ class AgrionMacro:
         def signal_handler(signum, frame):
             print(f"\n⚠️ 시그널 {signum}을 받았습니다. 로그를 안전하게 저장하고 종료합니다...")
             self.cleanup_and_exit()
+            # 강제 종료
+            os._exit(0)
         
-        # SIGINT (Ctrl+C), SIGTERM 등록
+        # SIGINT (Ctrl+C) 등록 (Windows에서 가장 안정적)
         signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
+        
+        # SIGTERM은 Windows에서 제한적이므로 조건부 등록
+        try:
+            signal.signal(signal.SIGTERM, signal_handler)
+        except (AttributeError, OSError):
+            # Windows에서는 SIGTERM이 지원되지 않을 수 있음
+            pass
         
         # 프로그램 종료 시 자동 정리 등록
         atexit.register(self.cleanup_and_exit)
     
     def cleanup_and_exit(self):
         """로그 파일을 안전하게 닫고 리소스를 정리합니다."""
+        if self.is_cleanup_done:
+            return  # 이미 cleanup이 완료됨
+        
+        self.is_cleanup_done = True
+        print("\n🔄 리소스 정리 중...")
+        
         try:
+            # 로그 파일 정리
             if self.log_file:
-                self.log_message("📝 프로그램 종료 - 로그 파일을 안전하게 저장합니다.")
-                self.log_file.flush()
-                self.log_file.close()
-                self.log_file = None
-                print(f"✅ 로그 파일이 안전하게 저장되었습니다: {self.log_filename}")
+                try:
+                    self.log_message("📝 프로그램 종료 - 로그 파일을 안전하게 저장합니다.")
+                    self.log_file.flush()
+                    self.log_file.close()
+                    self.log_file = None
+                    print(f"✅ 로그 파일이 안전하게 저장되었습니다: {self.log_filename}")
+                except Exception as log_error:
+                    print(f"⚠️ 로그 파일 정리 중 오류: {log_error}")
             
+            # 브라우저 드라이버 정리
             if self.driver:
-                self.driver.quit()
-                print("✅ 브라우저가 안전하게 종료되었습니다.")
-                
+                try:
+                    print("🔄 브라우저 종료 중...")
+                    self.driver.quit()
+                    self.driver = None
+                    print("✅ 브라우저가 안전하게 종료되었습니다.")
+                except Exception as driver_error:
+                    print(f"⚠️ 브라우저 종료 중 오류: {driver_error}")
+                    # 브라우저가 응답하지 않을 경우 강제 종료
+                    try:
+                        import psutil
+                        for proc in psutil.process_iter(['pid', 'name']):
+                            if 'firefox' in proc.info['name'].lower() or 'chrome' in proc.info['name'].lower():
+                                proc.terminate()
+                    except:
+                        pass
+                        
         except Exception as e:
-            print(f"⚠️ 정리 중 오류 발생: {e}")
+            print(f"⚠️ 정리 중 전체 오류 발생: {e}")
+        
+        print("✅ 리소스 정리 완료")
     
     def log_message(self, message):
         """메시지를 콘솔과 로그 파일에 출력합니다."""
@@ -129,72 +167,152 @@ class AgrionMacro:
             self.schedule_data = None
         
     def setup_driver(self):
-        """Firefox 드라이버를 설정합니다."""
-        firefox_options = Options()
-        # firefox_options.add_argument('--headless')  # 헤드리스 모드 (필요시 주석 해제)
+        """브라우저 드라이버를 설정합니다. Firefox를 우선 사용합니다."""
+        self.driver = None
+        self.wait = None
         
+        # Firefox 먼저 시도 (더 안정적)
+        if self._try_firefox():
+            return
+        
+        # Firefox 실패 시 Chrome 시도
+        if self._try_chrome():
+            return
+        
+        # 모든 브라우저 실패 시 오류 발생
+        raise Exception("Firefox와 Chrome 모두 설치되지 않았습니다. 브라우저를 설치해주세요.")
+    
+    def _try_chrome(self):
+        """Chrome 드라이버 설정을 시도합니다."""
         try:
+            print("Chrome 드라이버 설정 시도 중...")
+            chrome_options = ChromeOptions()
+            # chrome_options.add_argument('--headless')  # 헤드리스 모드 (필요시 주석 해제)
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--window-size=1920,1080')
+            chrome_options.add_argument('--disable-extensions')
+            chrome_options.add_argument('--disable-plugins')
+            chrome_options.add_argument('--disable-images')
+            chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            
+            try:
+                # ChromeDriverManager 사용
+                service = ChromeService(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            except Exception as e1:
+                print(f"ChromeDriverManager 실패: {e1}")
+                # 시스템 Chrome 드라이버 사용 시도
+                try:
+                    self.driver = webdriver.Chrome(options=chrome_options)
+                except Exception as e2:
+                    print(f"시스템 Chrome 드라이버 실패: {e2}")
+                    raise Exception(f"Chrome 드라이버 설정 실패: {e1}, {e2}")
+            
+            self.wait = WebDriverWait(self.driver, 10)
+            print("✅ Chrome 드라이버 설정 완료!")
+            return True
+            
+        except Exception as e:
+            print(f"Chrome 드라이버 설정 실패: {e}")
+            return False
+    
+    def _try_firefox(self):
+        """Firefox 드라이버 설정을 시도합니다."""
+        try:
+            print("Firefox 드라이버 설정 시도 중...")
+            firefox_options = FirefoxOptions()
+            # firefox_options.add_argument('--headless')  # 헤드리스 모드 (필요시 주석 해제)
+            
             # GeckoDriverManager 사용
-            service = Service(GeckoDriverManager().install())
+            service = FirefoxService(GeckoDriverManager().install())
             self.driver = webdriver.Firefox(service=service, options=firefox_options)
+            self.wait = WebDriverWait(self.driver, 10)
+            print("✅ Firefox 드라이버 설정 완료!")
+            return True
+            
         except Exception as e:
             print(f"GeckoDriverManager 오류: {e}")
             print("시스템 Firefox 드라이버 사용 시도...")
             try:
                 # 시스템에 설치된 Firefox 드라이버 사용
                 self.driver = webdriver.Firefox(options=firefox_options)
+                self.wait = WebDriverWait(self.driver, 10)
+                print("✅ 시스템 Firefox 드라이버 설정 완료!")
+                return True
             except Exception as e2:
                 print(f"시스템 Firefox 드라이버 오류: {e2}")
-                print("Firefox 브라우저가 설치되어 있는지 확인하세요.")
-                raise
-        
-        self.wait = WebDriverWait(self.driver, 10)
+                return False
         
     def login(self):
         """농업ON 사이트에 로그인합니다."""
-        try:
-            print("로그인 페이지로 이동 중...")
-            self.driver.get(Config.LOGIN_URL)
-            time.sleep(Config.FAST_WAIT_TIME)
-            
-            # 아이디 입력
-            username_input = self.wait.until(
-                EC.presence_of_element_located((By.ID, "memberId"))
-            )
-            username_input.clear()
-            time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
-            username_input.send_keys(Config.USERNAME)
-            time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
-            
-            # 비밀번호 입력
-            password_input = self.driver.find_element(By.ID, "pwd")
-            password_input.clear()
-            time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
-            password_input.send_keys(Config.PASSWORD)
-            time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
-            
-            # 로그인 버튼 클릭
-            login_button = self.driver.find_element(By.CSS_SELECTOR, "div.btnCon > button.login")
-            login_button.click()
-            
-            time.sleep(Config.FAST_LONG_WAIT_TIME)
-            print("로그인 완료!")
-            
-        except Exception as e:
-            print(f"로그인 중 오류 발생: {e}")
-            raise
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"로그인 시도 중... (시도 {attempt + 1}/{max_retries})")
+                print("로그인 페이지로 이동 중...")
+                self.driver.get(Config.LOGIN_URL)
+                time.sleep(Config.FAST_WAIT_TIME)
+                
+                # 페이지 로딩 확인
+                self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                
+                # 아이디 입력
+                username_input = self.wait.until(
+                    EC.presence_of_element_located((By.ID, "memberId"))
+                )
+                username_input.clear()
+                time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
+                username_input.send_keys(Config.USERNAME)
+                time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
+                
+                # 비밀번호 입력
+                password_input = self.driver.find_element(By.ID, "pwd")
+                password_input.clear()
+                time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
+                password_input.send_keys(Config.PASSWORD)
+                time.sleep(random.uniform(Config.INPUT_DELAY_MIN, Config.INPUT_DELAY_MAX))
+                
+                # 로그인 버튼 클릭
+                login_button = self.driver.find_element(By.CSS_SELECTOR, "div.btnCon > button.login")
+                login_button.click()
+                
+                time.sleep(Config.FAST_LONG_WAIT_TIME)
+                print("로그인 완료!")
+                return
+                
+            except Exception as e:
+                print(f"로그인 중 오류 발생 (시도 {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    print(f"5초 후 재시도합니다...")
+                    time.sleep(5)
+                else:
+                    print("최대 재시도 횟수 초과.")
+                    raise
             
     def navigate_to_diary_main(self):
         """영농일지 메인 페이지로 이동합니다."""
-        try:
-            print("영농일지 메인 페이지로 이동 중...")
-            self.driver.get(Config.DIARY_MAIN_URL)
-            time.sleep(Config.FAST_WAIT_TIME)
-            print("영농일지 메인 페이지 이동 완료!")
-            
-        except Exception as e:
-            print(f"영농일지 메인 페이지 이동 중 오류 발생: {e}")
-            raise
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                print(f"영농일지 메인 페이지로 이동 중... (시도 {attempt + 1}/{max_retries})")
+                self.driver.get(Config.DIARY_MAIN_URL)
+                time.sleep(Config.FAST_WAIT_TIME)
+                
+                # 페이지 로딩 확인
+                self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+                print("영농일지 메인 페이지 이동 완료!")
+                return
+                
+            except Exception as e:
+                print(f"영농일지 메인 페이지 이동 중 오류 발생 (시도 {attempt + 1}): {e}")
+                if attempt < max_retries - 1:
+                    print(f"5초 후 재시도합니다...")
+                    time.sleep(5)
+                else:
+                    print("최대 재시도 횟수 초과. 페이지 이동을 건너뜁니다.")
+                    raise
             
     def navigate_to_diary_detail_from_main(self):
         """메인 페이지에서 영농일지 작성 페이지로 이동합니다."""
@@ -1866,17 +1984,8 @@ class AgrionMacro:
         except Exception as e:
             self.log_message(f"매크로 실행 중 오류 발생: {e}")
         finally:
-            # 로그 파일 닫기
-            if self.log_file:
-                self.log_message("📝 로그 파일 저장 완료")
-                self.log_file.flush()
-                self.log_file.close()
-                self.log_file = None
-                print(f"✅ 로그 파일이 안전하게 저장되었습니다: {self.log_filename}")
-            
-            if self.driver:
-                self.driver.quit()
-                print("✅ 브라우저가 안전하게 종료되었습니다.")
+            # cleanup_and_exit에서 통합 처리
+            self.cleanup_and_exit()
     
     def get_farming_schedule(self):
         """사용자로부터 농작업 일정을 입력받습니다."""
@@ -1960,9 +2069,8 @@ class AgrionMacro:
         except Exception as e:
             print(f"❌ 테스트 모드 실행 중 오류 발생: {e}")
         finally:
-            if self.driver:
-                self.driver.quit()
-                print("✅ 브라우저가 안전하게 종료되었습니다.")
+            # cleanup_and_exit에서 통합 처리
+            self.cleanup_and_exit()
                 
     def find_last_processed_date_from_logs(self):
         """로그 파일에서 마지막으로 처리된 날짜를 찾습니다."""

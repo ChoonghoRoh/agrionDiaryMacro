@@ -1,141 +1,82 @@
-# 농업ON 영농일지 자동 등록 매크로
+# 🌾 농업ON 영농일지 자동 등록 매크로
 
 농업ON 사이트에서 영농일지를 자동으로 등록하는 Python 매크로입니다.
 
-## 기능
+## 📁 프로젝트 구조
 
-- 농업ON 사이트 자동 로그인
-- 영농일지 자동 등록
-- ChatGPT를 활용한 작업 내용 자동 생성
-- 설정 가능한 날짜 범위 및 품목
-- **농업ON API에서 벼 농작업 일정 자동 가져오기**
-- **빠른 입력 딜레이 및 입력 항목 자동 체크**
-- **🆕 안전한 로그 시스템 - 프로그램 중단 시에도 로그 보존**
+```
+agrionDiaryMacro/
+├── 📦 v1.0/                    # 기존 버전 (단일 파일 구조)
+├── 📦 v2.0/                    # 리팩토링 버전 (모듈화 구조)
+├── 📦 shared/                  # 공통 리소스
+└── 📦 docs/                    # 문서
+```
 
-## 설치 방법
+## 🚀 빠른 시작
 
-1. **필요한 패키지 설치:**
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **환경 변수 설정:**
-
-   ```bash
-   cp env_example.txt .env
-   ```
-
-   `.env` 파일을 열어서 다음 정보를 입력하세요:
-
-   - `AGRION_USERNAME`: 농업ON 아이디
-   - `AGRION_PASSWORD`: 농업ON 비밀번호
-   - `START_DATE`: 시작 날짜 (YYYY-MM-DD 형식)
-   - `END_DATE`: 종료 날짜 (YYYY-MM-DD 형식)
-   - `CROP_TYPE`: 품목 (예: 벼, 감자, 고구마 등)
-   - `OPENAI_API_KEY`: OpenAI API 키 (선택사항)
-
-## 사용 방법
-
-### 1. 농작업 일정 데이터 가져오기 (선택사항)
+### v1.0 (기존 버전) 실행
 
 ```bash
-python fetch_schedule.py
+cd v1.0
+python start_diary_writer.py
 ```
 
-이 명령어로 농업ON에서 벼 농작업 일정을 가져와서 `schedule_data/rice_schedule_YYYY.json` 파일로 저장합니다.
-
-**데이터 가져오기 방법:**
-
-1. **API에서 단일 연도 가져오기**: 빠르고 간단한 방법
-2. **웹페이지에서 여러 연도 한번에 가져오기**: 2024년, 2025년, 2026년 등 연도별로 자동 이동하여 데이터 수집
-3. **기존 데이터 확인**: 저장된 데이터 조회
-
-**기능:**
-
-- 여러 연도의 데이터 관리
-- 기존 데이터 확인 및 선택
-- 연도별 데이터 저장 및 로드
-- 웹페이지 자동 탐색 및 데이터 수집
-
-### 2. 영농일지 자동 등록
+### v2.0 (리팩토링 버전) 실행
 
 ```bash
-python run_macro.py
+cd v2.0
+python main/start_diary_writer_v2.py
 ```
 
-실행 모드를 선택하세요:
+## 📊 버전 비교
 
-- **테스트 모드**: 1개 영농일지만 등록 (작업 단계 선택 가능)
-- **전체 모드**: 설정된 기간 동안 모든 작업 단계 등록
+| 항목              | v1.0      | v2.0      | 개선도        |
+| ----------------- | --------- | --------- | ------------- |
+| **파일 구조**     | 단일 파일 | 모듈화    | **대폭 개선** |
+| **코드 라인**     | 2,255줄   | 300-400줄 | **80% 감소**  |
+| **유지보수성**    | 낮음      | 높음      | **대폭 개선** |
+| **테스트 용이성** | 어려움    | 쉬움      | **대폭 개선** |
+| **재사용성**      | 낮음      | 높음      | **대폭 개선** |
 
-## 매크로 동작 순서
+## 🔧 설치 및 설정
 
-1. 농업ON 사이트 로그인
-2. 영농일지 메인 페이지 이동
-3. 영농일지 상세 등록 페이지 이동
-4. 날짜 설정 (시작일/종료일)
-5. 품목 선택
-6. 모든 필지 선택
-7. 모든 품종 선택
-8. 작업 단계 선택 (API 데이터 또는 웹페이지 기본)
-9. ChatGPT를 활용한 작업 내용 자동 생성 및 입력
-10. **입력 항목 자동 체크 및 재설정**
-11. 영농일지 저장
-12. 알럿 확인
-13. 다음 작업 단계로 반복
+### 1. 의존성 설치
 
-## 새로운 기능
-
-### 🌾 농작업 일정 데이터 관리
-
-- **API 데이터 가져오기**: 농업ON에서 실제 벼 농작업 일정 자동 수집
-- **JSON 파일 저장**: `rice_schedule_data.json`으로 데이터 영구 보관
-- **월별 작업 일정**: 계절별 농작업 순서 자동 파악
-
-### ⚡ 성능 최적화
-
-- **빠른 입력 딜레이**: 30-40% 속도 향상
-- **입력 항목 자동 체크**: 누락된 항목 자동 감지 및 재설정
-- **최대 3회 재시도**: 안정적인 등록 보장
-
-### 🛡️ 안전한 로그 시스템
-
-- **시그널 핸들러**: Ctrl+C 중단 시에도 안전한 로그 저장
-- **즉시 flush**: 모든 로그가 실시간으로 디스크에 저장
-- **자동 로테이션**: 100MB 이상 시 새 로그 파일 생성
-- **오류 복구**: 로그 파일 손상 시 자동 재생성
-- **진행 상황 추적**: 중단 후 재시작 시 마지막 처리 날짜 자동 감지
-
-## 파일 구조
-
-```
-writer_diary/
-├── auto_diary_writer.py    # 메인 매크로 파일
-├── start_diary_writer.py   # 실행 스크립트
-├── ai_GPT_diary_content_generator.py # ChatGPT 내용 생성 모듈
-├── settings.py            # 설정 파일
-├── requirements.txt       # 필요한 패키지 목록
-├── .env                   # 환경 변수 파일 (생성 필요)
-├── data/                  # 농작업 일정 데이터 디렉토리
-│   └── rice_schedule_data.json
-├── log/                   # 로그 파일 디렉토리
-│   ├── diary_log_YYYYMMDD_HHMMSS.txt
-│   └── test_diary_log_YYYYMMDD_HHMMSS.txt
-└── README.md             # 사용법 설명
+```bash
+pip install -r shared/requirements.txt
 ```
 
-## 주의사항
+### 2. 환경 변수 설정
 
-- Firefox 브라우저가 설치되어 있어야 합니다.
-- 인터넷 연결이 안정적이어야 합니다.
-- 농업ON 사이트의 구조가 변경되면 매크로가 작동하지 않을 수 있습니다.
-- 과도한 사용은 계정 제재의 원인이 될 수 있으니 적절히 사용하세요.
-- API 데이터는 로그인된 상태에서만 가져올 수 있습니다.
+`.env` 파일을 생성하고 다음 내용을 입력하세요:
 
-## 문제 해결
+```env
+AGRION_USERNAME=your_username
+AGRION_PASSWORD=your_password
+START_DATE=2025-01-01
+END_DATE=2025-12-31
+CROP_TYPE=벼
+OPENAI_API_KEY=your_openai_api_key
+```
 
-- **로그인 실패**: 아이디/비밀번호를 확인하세요.
-- **요소를 찾을 수 없음**: 사이트 구조가 변경되었을 수 있습니다.
-- **Firefox 드라이버 오류**: Firefox 브라우저를 최신 버전으로 업데이트하세요.
-- **API 데이터 가져오기 실패**: 로그인 상태를 확인하고 다시 시도하세요.
+## 📖 자세한 문서
+
+- [v1.0 문서](docs/v1.0_documentation.md)
+- [v2.0 문서](docs/v2.0_documentation.md)
+- [마이그레이션 가이드](docs/migration_guide.md)
+
+## 🤝 기여하기
+
+1. Fork the Project
+2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the Branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 라이선스
+
+이 프로젝트는 MIT 라이선스 하에 배포됩니다. 자세한 내용은 `LICENSE` 파일을 참조하세요.
+
+## 📞 문의
+
+프로젝트에 대한 문의사항이 있으시면 이슈를 생성해주세요.

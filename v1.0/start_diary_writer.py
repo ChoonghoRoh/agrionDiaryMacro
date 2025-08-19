@@ -54,6 +54,7 @@ def main():
         print("매크로 실행을 취소했습니다.")
         return
     
+    macro = None
     try:
         # 매크로 실행
         macro = AgrionMacro()
@@ -69,9 +70,13 @@ def main():
         
     except KeyboardInterrupt:
         print("\n\n⚠️ 사용자에 의해 매크로가 중단되었습니다.")
+        if macro:
+            macro.cleanup_and_exit()
         print("📝 로그 파일이 안전하게 저장되었습니다.")
     except Exception as e:
         print(f"\n\n❌ 매크로 실행 중 오류가 발생했습니다: {e}")
+        if macro:
+            macro.cleanup_and_exit()
         print("📝 로그 파일을 확인하여 오류 내용을 확인하세요.")
     finally:
         print("\n✅ 매크로가 종료되었습니다.")

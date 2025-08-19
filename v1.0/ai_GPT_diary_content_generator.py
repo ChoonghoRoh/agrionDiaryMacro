@@ -54,8 +54,8 @@ class ContentGenerator:
             content = task_prompts.get(task_step, f"{crop_type} {task_step} 작업을 진행했습니다.")
             
             # 100자로 제한
-            if len(content) > 100:
-                content = content[:97] + "..."
+            if len(content) > 200:
+                content = content[:197] + "..."
             
             print(f"기본 템플릿 내용 ({len(content)}자): {content}")
             return content
@@ -66,28 +66,28 @@ class ContentGenerator:
             
             # 날짜 정보가 있으면 프롬프트에 포함
             if current_date:
-                prompt = f"{current_date} {crop_type} {task_step} 작업 영농일지 100자 이내로 작성. 날짜를 정확히 사용하세요."
+                prompt = f"{current_date} {crop_type} {task_step} 영농인에 대입하여 작성. 작업 영농일지 200자 이내로 작성. 날짜를 정확히 사용하세요."
             else:
-                prompt = f"{crop_type} {task_step} 작업 영농일지 100자 이내로 작성"
+                prompt = f"{crop_type} {task_step} 영농인에 대입하여 작성. 작업 영농일지 200자 이내로 작성"
             
             # OpenAI API 호출 (Config 설정 사용)
             openai.api_key = Config.OPENAI_API_KEY
             response = openai.ChatCompletion.create(
                 model=Config.GPT_MODEL,
                 messages=[
-                    {"role": "system", "content": "농업인 영농일지 작성. 100자 이내."},
+                    {"role": "system", "content": "농업인 영농일지 작성. 200자 이내."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=Config.GPT_MAX_TOKENS,
                 temperature=Config.GPT_TEMPERATURE
             )
             
-            # GPT가 생성한 내용 반환 (100자 제한)
+            # GPT가 생성한 내용 반환 (200자 제한)
             generated_content = response.choices[0].message.content.strip()
             
             # 100자로 제한
-            if len(generated_content) > 100:
-                generated_content = generated_content[:97] + "..."
+            if len(generated_content) > 200:
+                generated_content = generated_content[:197] + "..."
             
             print(f"GPT가 생성한 내용 ({len(generated_content)}자): {generated_content}")
             return generated_content
